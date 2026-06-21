@@ -283,8 +283,8 @@ app.post("/api/payment/create-checkout", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.CLIENT_URL}/payment/success?ebookId=${ebookId}&userEmail=${userEmail}`,
-      cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
+      success_url: `${process.env.BETTER_AUTH_URL}/payment/success?ebookId=${ebookId}&userEmail=${userEmail}`,
+      cancel_url: `${process.env.BETTER_AUTH_URL}/payment/cancel`,
       metadata: { ebookId, userEmail },
     });
 
@@ -328,6 +328,60 @@ app.post("/api/payment/save-purchase", async (req, res) => {
   }
 });
 
+
+// Get all users (admin)
+app.get("/api/admin/users", async (req, res) => {
+  try {
+    const result = await users().find().toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user role (admin)
+app.patch("/api/admin/users/:email/role", async (req, res) => {
+  try {
+    const { role } = req.body;
+    await users().updateOne(
+      { email: req.params.email },
+      { $set: { role } }
+    );
+    res.json({ message: "Role updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete user (admin)
+app.delete("/api/admin/users/:email", async (req, res) => {
+  try {
+    await users().deleteOne({ email: req.params.email });
+    res.json({ message: "User deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all ebooks (admin)
+app.get("/api/admin/ebooks", async (req, res) => {
+  try {
+    const result = await ebooks().find().sort({ createdAt: -1 }).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all transactions (admin)
+app.get("/api/admin/transactions", async (req, res) => {
+  try {
+    const result = await transactions().find().sort({ createdAt: -1 }).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 // ==================== START SERVER ====================
 
 const PORT = process.env.PORT || 8000;
