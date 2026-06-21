@@ -65,6 +65,9 @@ const verifyWriter = (req, res, next) => {
 
 app.get("/", (req, res) => res.send("Fable Server Running"));
 
+
+
+
 // Get featured ebooks
 app.get("/api/ebooks/featured", async (req, res) => {
   try {
@@ -72,6 +75,19 @@ app.get("/api/ebooks/featured", async (req, res) => {
       .find({ status: "published" })
       .sort({ createdAt: -1 })
       .limit(6)
+      .toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get writer's ebooks
+app.get("/api/ebooks/writer/:email", async (req, res) => {
+  try {
+    const result = await ebooks()
+      .find({ writerEmail: req.params.email })
+      .sort({ createdAt: -1 })
       .toArray();
     res.json(result);
   } catch (error) {
@@ -126,6 +142,75 @@ app.get("/api/ebooks/:id", async (req, res) => {
     const ebook = await ebooks().findOne({ _id: new ObjectId(req.params.id) });
     if (!ebook) return res.status(404).json({ message: "Ebook not found" });
     res.json(ebook);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Add ebook (writer)
+app.post("/api/ebooks", async (req, res) => {
+  try {
+    const ebook = {
+      ...req.body,
+      status: req.body.status || "published",
+      sales: 0,
+      createdAt: new Date(),
+    };
+    const result = await ebooks().insertOne(ebook);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Add bookmark
+app.post("/api/bookmarks", async (req, res) => {
+  try {
+    const { ebookId, userEmail } = req.body;
+    await users().updateOne(
+      { email: userEmail },
+      { $addToSet: { bookmarks: ebookId } }
+    );
+    res.json({ message: "Bookmarked" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Remove bookmark
+app.delete("/api/bookmarks/:ebookId", async (req, res) => {
+  try {
+    const { userEmail } = req.body;
+    await users().updateOne(
+      { email: userEmail },
+      { $pull: { bookmarks: req.params.ebookId } }
+    );
+    res.json({ message: "Bookmark removed" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get user purchases
+app.get("/api/purchases/:email", async (req, res) => {
+  try {
+    const result = await purchases().find({ userEmail: req.params.email }).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get bookmarks
+app.get("/api/bookmarks/:email", async (req, res) => {
+  try {
+    const user = await users().findOne({ email: req.params.email });
+    const bookmarkIds = user?.bookmarks || [];
+    if (bookmarkIds.length === 0) return res.json([]);
+    const bookmarkedEbooks = await ebooks()
+      .find({ _id: { $in: bookmarkIds.map(id => new ObjectId(id)) } })
+      .toArray();
+    res.json(bookmarkedEbooks);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
