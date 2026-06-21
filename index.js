@@ -82,7 +82,6 @@ app.patch("/api/users/:email/profile", async (req, res) => {
   }
 });
 
-// Admin analytics
 app.get("/api/admin/analytics", async (req, res) => {
   try {
     const totalUsers = await users().countDocuments();
@@ -93,12 +92,31 @@ app.get("/api/admin/analytics", async (req, res) => {
       .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
       .toArray();
 
+    // Monthly sales
+    const monthlySales = await purchases().aggregate([
+      { $group: {
+        _id: { $month: "$purchasedAt" },
+        sales: { $sum: 1 },
+        revenue: { $sum: "$price" }
+      }},
+      { $sort: { "_id": 1 } }
+    ]).toArray();
+
+    // Genre data — ebooks collection থেকে
+    const genreData = await ebooks().aggregate([
+      { $match: { status: "published" } },
+      { $group: { _id: "$genre", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]).toArray();
+
     res.json({
       totalUsers,
       totalWriters,
       totalEbooks,
       totalPurchases,
       totalRevenue: revenueData[0]?.total || 0,
+      monthlySales,
+      genreData,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -328,12 +346,17 @@ app.post("/api/payment/save-purchase", async (req, res) => {
   }
 });
 
-
-// Get all users (admin)
-app.get("/api/admin/users", async (req, res) => {
+app.patch("/api/admin/users/:email/role", async (req, res) => {
   try {
-    const result = await users().find().toArray();
-    res.json(result);
+    const { role, banned } = req.body;
+    const updateData = {};
+    if (role !== undefined) updateData.role = role;
+    if (banned !== undefined) updateData.banned = banned;
+    await users().updateOne(
+      { email: req.params.email },
+      { $set: updateData }
+    );
+    res.json({ message: "User updated" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
