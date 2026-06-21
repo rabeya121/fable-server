@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -8,12 +9,7 @@ dotenv.config();
 
 const app = express();
 
-app.use(
-  cors({
-    origin: "*",
-    credentials: true,
-  }),
-);
+app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json());
 
 // MongoDB Connection
@@ -58,9 +54,8 @@ const verifyAdmin = (req, res, next) => {
 };
 
 const verifyWriter = (req, res, next) => {
-  if (req.user?.role !== "writer" && req.user?.role !== "admin") {
+  if (req.user?.role !== "writer" && req.user?.role !== "admin")
     return res.status(403).json({ message: "Forbidden" });
-  }
   next();
 };
 
@@ -68,13 +63,15 @@ const verifyWriter = (req, res, next) => {
 
 app.get("/", (req, res) => res.send("Fable Server Running"));
 
+// ---------- USER ROUTES ----------
+
 // Update user profile
 app.patch("/api/users/:email/profile", async (req, res) => {
   try {
     const { name, image } = req.body;
     await users().updateOne(
       { email: req.params.email },
-      { $set: { name, image } },
+      { $set: { name, image } }
     );
     res.json({ message: "Profile updated" });
   } catch (error) {
@@ -82,6 +79,9 @@ app.patch("/api/users/:email/profile", async (req, res) => {
   }
 });
 
+// ---------- ADMIN ROUTES ----------
+
+// Analytics
 app.get("/api/admin/analytics", async (req, res) => {
   try {
     const totalUsers = await users().countDocuments();
@@ -92,7 +92,6 @@ app.get("/api/admin/analytics", async (req, res) => {
       .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
       .toArray();
 
-    // Monthly sales
     const monthlySales = await purchases().aggregate([
       { $group: {
         _id: { $month: "$purchasedAt" },
@@ -102,7 +101,6 @@ app.get("/api/admin/analytics", async (req, res) => {
       { $sort: { "_id": 1 } }
     ]).toArray();
 
-    // Genre data — ebooks collection থেকে
     const genreData = await ebooks().aggregate([
       { $match: { status: "published" } },
       { $group: { _id: "$genre", count: { $sum: 1 } } },
@@ -122,6 +120,65 @@ app.get("/api/admin/analytics", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// Get all users (admin)
+app.get("/api/admin/users", async (req, res) => {
+  try {
+    const result = await users().find().toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user role/ban (admin)
+app.patch("/api/admin/users/:email/role", async (req, res) => {
+  try {
+    const { role, banned } = req.body;
+    const updateData = {};
+    if (role !== undefined) updateData.role = role;
+    if (banned !== undefined) updateData.banned = banned;
+    await users().updateOne(
+      { email: req.params.email },
+      { $set: updateData }
+    );
+    res.json({ message: "User updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete user (admin)
+app.delete("/api/admin/users/:email", async (req, res) => {
+  try {
+    await users().deleteOne({ email: req.params.email });
+    res.json({ message: "User deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all ebooks (admin)
+app.get("/api/admin/ebooks", async (req, res) => {
+  try {
+    const result = await ebooks().find().sort({ createdAt: -1 }).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get all transactions (admin)
+app.get("/api/admin/transactions", async (req, res) => {
+  try {
+    const result = await transactions().find().sort({ createdAt: -1 }).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ---------- EBOOK ROUTES ----------
 
 // Get featured ebooks
 app.get("/api/ebooks/featured", async (req, res) => {
@@ -182,24 +239,35 @@ app.get("/api/ebooks", async (req, res) => {
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
   try {
-    const result = await purchases()
-      .aggregate([
-        {
-          $group: {
-            _id: "$writerEmail",
-            totalSales: { $sum: 1 },
-            writerName: { $first: "$writerName" },
-          },
-        },
-        { $sort: { totalSales: -1 } },
-        { $limit: 3 },
-      ])
-      .toArray();
-    res.json(result);
+    const fromPurchases = await purchases().aggregate([
+      { $group: {
+        _id: "$writerEmail",
+        totalSales: { $sum: 1 },
+        writerName: { $first: "$writerName" }
+      }},
+      { $sort: { totalSales: -1 } },
+      { $limit: 3 },
+    ]).toArray();
+
+    if (fromPurchases.length > 0) return res.json(fromPurchases);
+
+    const fromEbooks = await ebooks().aggregate([
+      { $match: { status: "published" } },
+      { $group: {
+        _id: "$writerEmail",
+        writerName: { $first: "$writerName" },
+        totalSales: { $sum: "$sales" }
+      }},
+      { $sort: { totalSales: -1 } },
+      { $limit: 3 },
+    ]).toArray();
+
+    res.json(fromEbooks);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 // Get single ebook
 app.get("/api/ebooks/:id", async (req, res) => {
   try {
@@ -211,7 +279,7 @@ app.get("/api/ebooks/:id", async (req, res) => {
   }
 });
 
-// Add ebook (writer)
+// Add ebook
 app.post("/api/ebooks", async (req, res) => {
   try {
     const ebook = {
@@ -227,13 +295,52 @@ app.post("/api/ebooks", async (req, res) => {
   }
 });
 
+// Update ebook
+app.put("/api/ebooks/:id", async (req, res) => {
+  try {
+    const result = await ebooks().updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: req.body }
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Toggle ebook status
+app.patch("/api/ebooks/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
+    await ebooks().updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { status } }
+    );
+    res.json({ message: "Status updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete ebook
+app.delete("/api/ebooks/:id", async (req, res) => {
+  try {
+    await ebooks().deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ message: "Ebook deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ---------- BOOKMARK ROUTES ----------
+
 // Add bookmark
 app.post("/api/bookmarks", async (req, res) => {
   try {
     const { ebookId, userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $addToSet: { bookmarks: ebookId } },
+      { $addToSet: { bookmarks: ebookId } }
     );
     res.json({ message: "Bookmarked" });
   } catch (error) {
@@ -247,21 +354,9 @@ app.delete("/api/bookmarks/:ebookId", async (req, res) => {
     const { userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $pull: { bookmarks: req.params.ebookId } },
+      { $pull: { bookmarks: req.params.ebookId } }
     );
     res.json({ message: "Bookmark removed" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get user purchases
-app.get("/api/purchases/:email", async (req, res) => {
-  try {
-    const result = await purchases()
-      .find({ userEmail: req.params.email })
-      .toArray();
-    res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -282,6 +377,20 @@ app.get("/api/bookmarks/:email", async (req, res) => {
   }
 });
 
+// ---------- PURCHASE ROUTES ----------
+
+// Get user purchases
+app.get("/api/purchases/:email", async (req, res) => {
+  try {
+    const result = await purchases()
+      .find({ userEmail: req.params.email })
+      .toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Create Stripe checkout session
 app.post("/api/payment/create-checkout", async (req, res) => {
   try {
@@ -290,16 +399,14 @@ app.post("/api/payment/create-checkout", async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: { name: ebookTitle },
-            unit_amount: Math.round(price * 100),
-          },
-          quantity: 1,
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: { name: ebookTitle },
+          unit_amount: Math.round(price * 100),
         },
-      ],
+        quantity: 1,
+      }],
       mode: "payment",
       success_url: `${process.env.BETTER_AUTH_URL}/payment/success?ebookId=${ebookId}&userEmail=${userEmail}`,
       cancel_url: `${process.env.BETTER_AUTH_URL}/payment/cancel`,
@@ -315,10 +422,8 @@ app.post("/api/payment/create-checkout", async (req, res) => {
 // Save purchase after success
 app.post("/api/payment/save-purchase", async (req, res) => {
   try {
-    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } =
-      req.body;
+    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } = req.body;
 
-    // Check already purchased
     const existing = await purchases().findOne({ ebookId, userEmail });
     if (existing) return res.json({ message: "Already purchased" });
 
@@ -346,65 +451,6 @@ app.post("/api/payment/save-purchase", async (req, res) => {
   }
 });
 
-app.patch("/api/admin/users/:email/role", async (req, res) => {
-  try {
-    const { role, banned } = req.body;
-    const updateData = {};
-    if (role !== undefined) updateData.role = role;
-    if (banned !== undefined) updateData.banned = banned;
-    await users().updateOne(
-      { email: req.params.email },
-      { $set: updateData }
-    );
-    res.json({ message: "User updated" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Update user role (admin)
-app.patch("/api/admin/users/:email/role", async (req, res) => {
-  try {
-    const { role } = req.body;
-    await users().updateOne(
-      { email: req.params.email },
-      { $set: { role } }
-    );
-    res.json({ message: "Role updated" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Delete user (admin)
-app.delete("/api/admin/users/:email", async (req, res) => {
-  try {
-    await users().deleteOne({ email: req.params.email });
-    res.json({ message: "User deleted" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get all ebooks (admin)
-app.get("/api/admin/ebooks", async (req, res) => {
-  try {
-    const result = await ebooks().find().sort({ createdAt: -1 }).toArray();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get all transactions (admin)
-app.get("/api/admin/transactions", async (req, res) => {
-  try {
-    const result = await transactions().find().sort({ createdAt: -1 }).toArray();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
 // ==================== START SERVER ====================
 
 const PORT = process.env.PORT || 8000;
