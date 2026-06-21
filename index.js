@@ -80,6 +80,29 @@ app.patch("/api/users/:email/profile", async (req, res) => {
   }
 });
 
+// Admin analytics
+app.get("/api/admin/analytics", async (req, res) => {
+  try {
+    const totalUsers = await users().countDocuments();
+    const totalWriters = await users().countDocuments({ role: "writer" });
+    const totalEbooks = await ebooks().countDocuments();
+    const totalPurchases = await purchases().countDocuments();
+    const revenueData = await transactions().aggregate([
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]).toArray();
+
+    res.json({
+      totalUsers,
+      totalWriters,
+      totalEbooks,
+      totalPurchases,
+      totalRevenue: revenueData[0]?.total || 0,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get featured ebooks
 app.get("/api/ebooks/featured", async (req, res) => {
   try {
