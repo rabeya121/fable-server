@@ -79,6 +79,16 @@ app.patch("/api/users/:email/profile", async (req, res) => {
   }
 });
 
+// Get single user
+app.get("/api/users/:email", async (req, res) => {
+  try {
+    const user = await users().findOne({ email: req.params.email });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // ---------- ADMIN ROUTES ----------
 
 // Analytics
@@ -307,6 +317,7 @@ app.put("/api/ebooks/:id", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 // Toggle ebook status
 app.patch("/api/ebooks/:id/status", async (req, res) => {
