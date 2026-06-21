@@ -80,7 +80,19 @@ app.patch("/api/users/:email/profile", async (req, res) => {
   }
 });
 
-
+// Get featured ebooks
+app.get("/api/ebooks/featured", async (req, res) => {
+  try {
+    const result = await ebooks()
+      .find({ status: "published" })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 // Get writer's ebooks
 app.get("/api/ebooks/writer/:email", async (req, res) => {
