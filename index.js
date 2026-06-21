@@ -8,10 +8,12 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({
-  origin: '*',
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 // MongoDB Connection
@@ -50,7 +52,8 @@ const verifyToken = (req, res, next) => {
 };
 
 const verifyAdmin = (req, res, next) => {
-  if (req.user?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+  if (req.user?.role !== "admin")
+    return res.status(403).json({ message: "Forbidden" });
   next();
 };
 
@@ -65,14 +68,13 @@ const verifyWriter = (req, res, next) => {
 
 app.get("/", (req, res) => res.send("Fable Server Running"));
 
-
 // Update user profile
 app.patch("/api/users/:email/profile", async (req, res) => {
   try {
     const { name, image } = req.body;
     await users().updateOne(
       { email: req.params.email },
-      { $set: { name, image } }
+      { $set: { name, image } },
     );
     res.json({ message: "Profile updated" });
   } catch (error) {
@@ -87,9 +89,9 @@ app.get("/api/admin/analytics", async (req, res) => {
     const totalWriters = await users().countDocuments({ role: "writer" });
     const totalEbooks = await ebooks().countDocuments();
     const totalPurchases = await purchases().countDocuments();
-    const revenueData = await transactions().aggregate([
-      { $group: { _id: null, total: { $sum: "$amount" } } }
-    ]).toArray();
+    const revenueData = await transactions()
+      .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
+      .toArray();
 
     res.json({
       totalUsers,
@@ -137,10 +139,11 @@ app.get("/api/ebooks", async (req, res) => {
     let query = { status: "published" };
 
     if (genre) query.genre = genre;
-    if (search) query.$or = [
-      { title: { $regex: search, $options: "i" } },
-      { writerName: { $regex: search, $options: "i" } },
-    ];
+    if (search)
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { writerName: { $regex: search, $options: "i" } },
+      ];
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
@@ -161,11 +164,19 @@ app.get("/api/ebooks", async (req, res) => {
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
   try {
-    const result = await purchases().aggregate([
-      { $group: { _id: "$writerEmail", totalSales: { $sum: 1 }, writerName: { $first: "$writerName" } } },
-      { $sort: { totalSales: -1 } },
-      { $limit: 3 },
-    ]).toArray();
+    const result = await purchases()
+      .aggregate([
+        {
+          $group: {
+            _id: "$writerEmail",
+            totalSales: { $sum: 1 },
+            writerName: { $first: "$writerName" },
+          },
+        },
+        { $sort: { totalSales: -1 } },
+        { $limit: 3 },
+      ])
+      .toArray();
     res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -204,7 +215,7 @@ app.post("/api/bookmarks", async (req, res) => {
     const { ebookId, userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $addToSet: { bookmarks: ebookId } }
+      { $addToSet: { bookmarks: ebookId } },
     );
     res.json({ message: "Bookmarked" });
   } catch (error) {
@@ -218,7 +229,7 @@ app.delete("/api/bookmarks/:ebookId", async (req, res) => {
     const { userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $pull: { bookmarks: req.params.ebookId } }
+      { $pull: { bookmarks: req.params.ebookId } },
     );
     res.json({ message: "Bookmark removed" });
   } catch (error) {
@@ -229,7 +240,9 @@ app.delete("/api/bookmarks/:ebookId", async (req, res) => {
 // Get user purchases
 app.get("/api/purchases/:email", async (req, res) => {
   try {
-    const result = await purchases().find({ userEmail: req.params.email }).toArray();
+    const result = await purchases()
+      .find({ userEmail: req.params.email })
+      .toArray();
     res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -243,9 +256,73 @@ app.get("/api/bookmarks/:email", async (req, res) => {
     const bookmarkIds = user?.bookmarks || [];
     if (bookmarkIds.length === 0) return res.json([]);
     const bookmarkedEbooks = await ebooks()
-      .find({ _id: { $in: bookmarkIds.map(id => new ObjectId(id)) } })
+      .find({ _id: { $in: bookmarkIds.map((id) => new ObjectId(id)) } })
       .toArray();
     res.json(bookmarkedEbooks);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create Stripe checkout session
+app.post("/api/payment/create-checkout", async (req, res) => {
+  try {
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+    const { ebookId, ebookTitle, price, userEmail } = req.body;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: ebookTitle },
+            unit_amount: Math.round(price * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `${process.env.CLIENT_URL}/payment/success?ebookId=${ebookId}&userEmail=${userEmail}`,
+      cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
+      metadata: { ebookId, userEmail },
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Save purchase after success
+app.post("/api/payment/save-purchase", async (req, res) => {
+  try {
+    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } =
+      req.body;
+
+    // Check already purchased
+    const existing = await purchases().findOne({ ebookId, userEmail });
+    if (existing) return res.json({ message: "Already purchased" });
+
+    await purchases().insertOne({
+      ebookId,
+      userEmail,
+      ebookTitle,
+      price,
+      writerEmail,
+      writerName,
+      purchasedAt: new Date(),
+    });
+
+    await transactions().insertOne({
+      type: "purchase",
+      userEmail,
+      amount: price,
+      ebookTitle,
+      createdAt: new Date(),
+    });
+
+    res.json({ message: "Purchase saved!" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
