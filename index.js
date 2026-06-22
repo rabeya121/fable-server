@@ -121,6 +121,16 @@ app.get("/api/admin/analytics", async (req, res) => {
         { $sort: { count: -1 } },
       ])
       .toArray();
+    const recentPurchases = await purchases()
+      .find()
+      .sort({ purchasedAt: -1 })
+      .limit(5)
+      .toArray();
+    const recentBookmarks = await users()
+      .find({ bookmarks: { $exists: true, $ne: [] } })
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .toArray();
 
     res.json({
       totalUsers,
@@ -130,6 +140,8 @@ app.get("/api/admin/analytics", async (req, res) => {
       totalRevenue: revenueData[0]?.total || 0,
       monthlySales,
       genreData,
+      recentPurchases,
+      recentBookmarks,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -222,34 +234,7 @@ app.get("/api/ebooks/writer/:email", async (req, res) => {
   }
 });
 
-// Get all ebooks
-app.get("/api/ebooks", async (req, res) => {
-  try {
-    const { genre, search, sort, minPrice, maxPrice } = req.query;
-    let query = { status: "published" };
 
-    if (genre) query.genre = genre;
-    if (search)
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { writerName: { $regex: search, $options: "i" } },
-      ];
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = Number(minPrice);
-      if (maxPrice) query.price.$lte = Number(maxPrice);
-    }
-
-    let sortOption = { createdAt: -1 };
-    if (sort === "price_low") sortOption = { price: 1 };
-    if (sort === "price_high") sortOption = { price: -1 };
-
-    const result = await ebooks().find(query).sort(sortOption).toArray();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
 
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
@@ -484,7 +469,7 @@ app.patch("/api/admin/transactions/:id/status", async (req, res) => {
     const { status } = req.body;
     await transactions().updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { status } }
+      { $set: { status } },
     );
     res.json({ message: "Status updated" });
   } catch (error) {
