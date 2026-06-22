@@ -234,6 +234,34 @@ app.get("/api/ebooks/writer/:email", async (req, res) => {
   }
 });
 
+// Get all ebooks
+app.get("/api/ebooks", async (req, res) => {
+  try {
+    const { genre, search, sort, minPrice, maxPrice } = req.query;
+    let query = { status: "published" };
+
+    if (genre) query.genre = genre;
+    if (search)
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { writerName: { $regex: search, $options: "i" } },
+      ];
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    let sortOption = { createdAt: -1 };
+    if (sort === "price_low") sortOption = { price: 1 };
+    if (sort === "price_high") sortOption = { price: -1 };
+
+    const result = await ebooks().find(query).sort(sortOption).toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 
 // Get top writers
