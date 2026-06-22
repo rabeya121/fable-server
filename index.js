@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -71,7 +70,7 @@ app.patch("/api/users/:email/profile", async (req, res) => {
     const { name, image } = req.body;
     await users().updateOne(
       { email: req.params.email },
-      { $set: { name, image } }
+      { $set: { name, image } },
     );
     res.json({ message: "Profile updated" });
   } catch (error) {
@@ -102,20 +101,26 @@ app.get("/api/admin/analytics", async (req, res) => {
       .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
       .toArray();
 
-    const monthlySales = await purchases().aggregate([
-      { $group: {
-        _id: { $month: "$purchasedAt" },
-        sales: { $sum: 1 },
-        revenue: { $sum: "$price" }
-      }},
-      { $sort: { "_id": 1 } }
-    ]).toArray();
+    const monthlySales = await purchases()
+      .aggregate([
+        {
+          $group: {
+            _id: { $month: "$purchasedAt" },
+            sales: { $sum: 1 },
+            revenue: { $sum: "$price" },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ])
+      .toArray();
 
-    const genreData = await ebooks().aggregate([
-      { $match: { status: "published" } },
-      { $group: { _id: "$genre", count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]).toArray();
+    const genreData = await ebooks()
+      .aggregate([
+        { $match: { status: "published" } },
+        { $group: { _id: "$genre", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
 
     res.json({
       totalUsers,
@@ -148,10 +153,7 @@ app.patch("/api/admin/users/:email/role", async (req, res) => {
     const updateData = {};
     if (role !== undefined) updateData.role = role;
     if (banned !== undefined) updateData.banned = banned;
-    await users().updateOne(
-      { email: req.params.email },
-      { $set: updateData }
-    );
+    await users().updateOne({ email: req.params.email }, { $set: updateData });
     res.json({ message: "User updated" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -181,7 +183,10 @@ app.get("/api/admin/ebooks", async (req, res) => {
 // Get all transactions (admin)
 app.get("/api/admin/transactions", async (req, res) => {
   try {
-    const result = await transactions().find().sort({ createdAt: -1 }).toArray();
+    const result = await transactions()
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
     res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -249,28 +254,36 @@ app.get("/api/ebooks", async (req, res) => {
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
   try {
-    const fromPurchases = await purchases().aggregate([
-      { $group: {
-        _id: "$writerEmail",
-        totalSales: { $sum: 1 },
-        writerName: { $first: "$writerName" }
-      }},
-      { $sort: { totalSales: -1 } },
-      { $limit: 3 },
-    ]).toArray();
+    const fromPurchases = await purchases()
+      .aggregate([
+        {
+          $group: {
+            _id: "$writerEmail",
+            totalSales: { $sum: 1 },
+            writerName: { $first: "$writerName" },
+          },
+        },
+        { $sort: { totalSales: -1 } },
+        { $limit: 3 },
+      ])
+      .toArray();
 
     if (fromPurchases.length > 0) return res.json(fromPurchases);
 
-    const fromEbooks = await ebooks().aggregate([
-      { $match: { status: "published" } },
-      { $group: {
-        _id: "$writerEmail",
-        writerName: { $first: "$writerName" },
-        totalSales: { $sum: "$sales" }
-      }},
-      { $sort: { totalSales: -1 } },
-      { $limit: 3 },
-    ]).toArray();
+    const fromEbooks = await ebooks()
+      .aggregate([
+        { $match: { status: "published" } },
+        {
+          $group: {
+            _id: "$writerEmail",
+            writerName: { $first: "$writerName" },
+            totalSales: { $sum: "$sales" },
+          },
+        },
+        { $sort: { totalSales: -1 } },
+        { $limit: 3 },
+      ])
+      .toArray();
 
     res.json(fromEbooks);
   } catch (error) {
@@ -310,7 +323,7 @@ app.put("/api/ebooks/:id", async (req, res) => {
   try {
     const result = await ebooks().updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: req.body }
+      { $set: req.body },
     );
     res.json(result);
   } catch (error) {
@@ -318,14 +331,13 @@ app.put("/api/ebooks/:id", async (req, res) => {
   }
 });
 
-
 // Toggle ebook status
 app.patch("/api/ebooks/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
     await ebooks().updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { status } }
+      { $set: { status } },
     );
     res.json({ message: "Status updated" });
   } catch (error) {
@@ -351,7 +363,7 @@ app.post("/api/bookmarks", async (req, res) => {
     const { ebookId, userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $addToSet: { bookmarks: ebookId } }
+      { $addToSet: { bookmarks: ebookId } },
     );
     res.json({ message: "Bookmarked" });
   } catch (error) {
@@ -365,7 +377,7 @@ app.delete("/api/bookmarks/:ebookId", async (req, res) => {
     const { userEmail } = req.body;
     await users().updateOne(
       { email: userEmail },
-      { $pull: { bookmarks: req.params.ebookId } }
+      { $pull: { bookmarks: req.params.ebookId } },
     );
     res.json({ message: "Bookmark removed" });
   } catch (error) {
@@ -410,14 +422,16 @@ app.post("/api/payment/create-checkout", async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: ebookTitle },
-          unit_amount: Math.round(price * 100),
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: ebookTitle },
+            unit_amount: Math.round(price * 100),
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      }],
+      ],
       mode: "payment",
       success_url: `${process.env.BETTER_AUTH_URL}/payment/success?ebookId=${ebookId}&userEmail=${userEmail}`,
       cancel_url: `${process.env.BETTER_AUTH_URL}/payment/cancel`,
@@ -433,7 +447,8 @@ app.post("/api/payment/create-checkout", async (req, res) => {
 // Save purchase after success
 app.post("/api/payment/save-purchase", async (req, res) => {
   try {
-    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } = req.body;
+    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } =
+      req.body;
 
     const existing = await purchases().findOne({ ebookId, userEmail });
     if (existing) return res.json({ message: "Already purchased" });
@@ -447,16 +462,31 @@ app.post("/api/payment/save-purchase", async (req, res) => {
       writerName,
       purchasedAt: new Date(),
     });
-
     await transactions().insertOne({
       type: "purchase",
       userEmail,
+      writerEmail,
+      writerName,
       amount: price,
       ebookTitle,
       createdAt: new Date(),
     });
 
     res.json({ message: "Purchase saved!" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update transaction status (admin)
+app.patch("/api/admin/transactions/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
+    await transactions().updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { status } }
+    );
+    res.json({ message: "Status updated" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
