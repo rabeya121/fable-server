@@ -8,9 +8,12 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({ 
-  origin: "*", 
-  credentials: true }));
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 // MongoDB Connection
@@ -236,6 +239,19 @@ app.get("/api/ebooks/writer/:email", async (req, res) => {
   }
 });
 
+// Get writer sales
+app.get("/api/sales/writer/:email", async (req, res) => {
+  try {
+    const result = await purchases()
+      .find({ writerEmail: req.params.email })
+      .sort({ purchasedAt: -1 })
+      .toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get all ebooks
 app.get("/api/ebooks", async (req, res) => {
   try {
@@ -264,7 +280,6 @@ app.get("/api/ebooks", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-
 
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
@@ -460,10 +475,10 @@ app.post("/api/payment/create-checkout", async (req, res) => {
 });
 
 // Save purchase after success
+
 app.post("/api/payment/save-purchase", async (req, res) => {
   try {
-    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } =
-      req.body;
+    const { ebookId, userEmail, ebookTitle, price, writerEmail, writerName } = req.body;
 
     const existing = await purchases().findOne({ ebookId, userEmail });
     if (existing) return res.json({ message: "Already purchased" });
@@ -477,6 +492,12 @@ app.post("/api/payment/save-purchase", async (req, res) => {
       writerName,
       purchasedAt: new Date(),
     });
+
+    await ebooks().updateOne(
+      { _id: new ObjectId(ebookId) },
+      { $inc: { sales: 1 } }
+    );
+
     await transactions().insertOne({
       type: "purchase",
       userEmail,
@@ -507,7 +528,48 @@ app.patch("/api/admin/transactions/:id/status", async (req, res) => {
   }
 });
 
+
+// Get all writers (admin)
+app.get("/api/admin/writers", async (req, res) => {
+  try {
+    const result = await users()
+      .find({ role: "writer" })
+      .toArray();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Featured writer set/remove (admin)
+app.patch("/api/admin/writers/:email/featured", async (req, res) => {
+  try {
+    const { featured } = req.body;
+    await users().updateOne(
+      { email: req.params.email },
+      { $set: { featured } }
+    );
+    res.json({ message: "Writer featured status updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Writer sales manually edit (admin)
+app.patch("/api/admin/writers/:email/sales", async (req, res) => {
+  try {
+    const { sales } = req.body;
+    await ebooks().updateMany(
+      { writerEmail: req.params.email },
+      { $set: { sales } }
+    );
+    res.json({ message: "Sales updated" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // ==================== START SERVER ====================
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.NEXT_PUBLIC_BASE_URL?.split(":")[2];
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
