@@ -10,7 +10,7 @@ REST API backend for the Fable ebook sharing platform.
 - Express.js
 - MongoDB (Native Driver)
 - Stripe
-- JWT
+-better-auth
 - dotenv
 - cors
 
