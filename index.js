@@ -492,7 +492,7 @@ app.post("/api/payment/save-purchase", async (req, res) => {
       writerName,
       purchasedAt: new Date(),
     });
-
+g
     await ebooks().updateOne(
       { _id: new ObjectId(ebookId) },
       { $inc: { sales: 1 } }
@@ -528,48 +528,7 @@ app.patch("/api/admin/transactions/:id/status", async (req, res) => {
   }
 });
 
-
-// Get all writers (admin)
-app.get("/api/admin/writers", async (req, res) => {
-  try {
-    const result = await users()
-      .find({ role: "writer" })
-      .toArray();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Featured writer set/remove (admin)
-app.patch("/api/admin/writers/:email/featured", async (req, res) => {
-  try {
-    const { featured } = req.body;
-    await users().updateOne(
-      { email: req.params.email },
-      { $set: { featured } }
-    );
-    res.json({ message: "Writer featured status updated" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Writer sales manually edit (admin)
-app.patch("/api/admin/writers/:email/sales", async (req, res) => {
-  try {
-    const { sales } = req.body;
-    await ebooks().updateMany(
-      { writerEmail: req.params.email },
-      { $set: { sales } }
-    );
-    res.json({ message: "Sales updated" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // ==================== START SERVER ====================
 
-const PORT = process.env.NEXT_PUBLIC_BASE_URL?.split(":")[2];
+const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
