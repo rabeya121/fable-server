@@ -492,7 +492,7 @@ app.post("/api/payment/save-purchase", async (req, res) => {
       writerName,
       purchasedAt: new Date(),
     });
-g
+
     await ebooks().updateOne(
       { _id: new ObjectId(ebookId) },
       { $inc: { sales: 1 } }
