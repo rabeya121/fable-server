@@ -518,6 +518,18 @@ app.post("/api/payment/save-purchase", async (req, res) => {
       createdAt: new Date(),
     });
 
+
+    // ✅ Dummy Email Notification
+    console.log("📧 Email Notification Sent:");
+    console.log(`To: ${userEmail}`);
+    console.log(`Subject: Purchase Confirmation - ${ebookTitle}`);
+    console.log(`Body: Thank you for purchasing "${ebookTitle}" for $${price}. Enjoy reading!`);
+    console.log("---");
+    console.log(`To: ${writerEmail}`);
+    console.log(`Subject: New Sale - ${ebookTitle}`);
+    console.log(`Body: Congratulations! ${userEmail} purchased your ebook "${ebookTitle}" for $${price}.`);
+
+
     res.json({ message: "Purchase saved!" });
   } catch (error) {
     res.status(500).json({ message: error.message });
