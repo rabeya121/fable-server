@@ -308,6 +308,7 @@ app.get("/api/ebooks", async (req, res) => {
   }
 });
 
+
 // Get top writers
 app.get("/api/writers/top", async (req, res) => {
   try {
@@ -325,9 +326,7 @@ app.get("/api/writers/top", async (req, res) => {
       ])
       .toArray();
 
-    if (fromPurchases.length > 0) return res.json(fromPurchases);
-
-    const fromEbooks = await ebooks()
+    const topWriters = fromPurchases.length > 0 ? fromPurchases : await ebooks()
       .aggregate([
         { $match: { status: "published" } },
         {
@@ -342,12 +341,19 @@ app.get("/api/writers/top", async (req, res) => {
       ])
       .toArray();
 
-    res.json(fromEbooks);
+
+    const enriched = await Promise.all(
+      topWriters.map(async (writer) => {
+        const user = await users().findOne({ email: writer._id });
+        return { ...writer, avatar: user?.image || null };
+      })
+    );
+
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
-
 
 // Get single ebook
 app.get("/api/ebooks/:id", async (req, res) => {
