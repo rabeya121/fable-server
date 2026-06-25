@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const { MongoClient, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 
 dotenv.config();
 
@@ -25,6 +26,22 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Dummy email transporter
+const transporter = nodemailer.createTransport({
+  host: "smtp.ethereal.email",
+  port: 587,
+  auth: {
+    user: "ethereal_user",
+    pass: "ethereal_pass",
+  },
+});
+
+const sendEmail = async (to, subject, text) => {
+  console.log(`📧 Email sent to: ${to}`);
+  console.log(`Subject: ${subject}`);
+  console.log(`Message: ${text}`);
+};
 
 // MongoDB Connection
 const client = new MongoClient(process.env.MONGODB_URL);
@@ -519,15 +536,19 @@ app.post("/api/payment/save-purchase", async (req, res) => {
     });
 
 
-    // ✅ Dummy Email Notification
-    console.log("📧 Email Notification Sent:");
-    console.log(`To: ${userEmail}`);
-    console.log(`Subject: Purchase Confirmation - ${ebookTitle}`);
-    console.log(`Body: Thank you for purchasing "${ebookTitle}" for $${price}. Enjoy reading!`);
-    console.log("---");
-    console.log(`To: ${writerEmail}`);
-    console.log(`Subject: New Sale - ${ebookTitle}`);
-    console.log(`Body: Congratulations! ${userEmail} purchased your ebook "${ebookTitle}" for $${price}.`);
+    
+    // 📧 Dummy Email Notification
+    await sendEmail(
+      userEmail,
+      "Purchase Successful – Fable",
+      `Hi! You have successfully purchased "${ebookTitle}" for $${price}. Enjoy reading!`
+    );
+
+    await sendEmail(
+      writerEmail,
+      "New Sale – Fable",
+      `Hi ${writerName}! Your ebook "${ebookTitle}" was purchased by ${userEmail} for $${price}.`
+    );
 
 
     res.json({ message: "Purchase saved!" });
